@@ -17,6 +17,10 @@ x-common-service: &common-service
   read_only: true
   restart: "no"
   pids_limit: 150
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
   networks:
     - ai_network
 
@@ -34,15 +38,15 @@ services:
     environment:
       <<: *common-env
       DEVCONTAINER: true
-      #ANTHROPIC_API_KEY: blah
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - workspace:/workspace
       - home_claude:/home/node/.claude
     tmpfs:
       - /tmp:noexec,nodev,nosuid,mode=1777
       - /home/node:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=755,noexec,nodev,nosuid
-      - /home/node/.config:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=700,noexec,nodev,nosuid
-      - /home/node/.npm:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=700,noexec,nodev,nosuid
+#      - /home/node/.config:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=700,noexec,nodev,nosuid
+#      - /home/node/.npm:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=700,noexec,nodev,nosuid
 
   pi:
     <<: *common-service

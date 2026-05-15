@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     vim \
+    jq \
     ca-certificates \
     procps \
     build-essential \

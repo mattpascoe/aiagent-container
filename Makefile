@@ -1,4 +1,4 @@
-.PHONY: build run clean shell setup
+.PHONY: build update run run-args clean purge shell setup usage help logs
 .ONESHELL:
 
 # Gather the current users real username and UID/GID so we can use it within the container
@@ -19,17 +19,20 @@ usage:
 	Available targets:
 	  build      Build docker container
 	  update     Build a fresh container with no cache
-	  clean      Remove generated files
-	  usage      Show this help message
 	  run        Run the default pi context
+	  run-args   Run the container with extra args (args="...")
 	  shell      Start the container in bash
+	  logs       Tail container logs
+	  clean      Stop and remove containers
+	  purge      Remove containers, images, and named volumes
+	  usage      Show this help message
 	
 	Common options:
 	  SVC=claude		The composer service to run (default: pi)
 	  WORKDIR=/some/path	The workspace dir to mount into the container (default: .)
 	
 	Examples:
-	  make SVC=claude WORKDIR=/opt/dev/mpascoe run
+	  make SVC=claude WORKDIR=/opt/dev/username run
 
 	EOF
 
@@ -55,5 +58,11 @@ run-args: setup
 shell: setup
 	docker compose run --rm --entrypoint /bin/bash $(SVC)
 
+logs:
+	docker compose logs --tail=100 -f $(SVC)
+
 clean:
 	docker compose down $(SVC)
+
+#purge: clean
+#	docker compose down --rmi local --volumes
