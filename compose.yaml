@@ -87,6 +87,7 @@ volumes:
       device: ~/.pi
 
   workspace:
+    name: ${REAL_USER}_workspace_${SVC}
     driver: local
     driver_opts:
       type: none

@@ -55,6 +55,8 @@ make update
 
 The `WORKDIR` variable (default: `.`) is bind-mounted into the container at `/workspace`.
 
+For the claude environment, you would be asked every time for your configuration when you start the container, the `entrypoint.sh` is used to copy the latest .claude/backups file into .claude.json.  This is an imperfect hack to get around this. If you run the shell, you may want to run `/entrypoint.sh` to pick this up.
+
 ## Project Layout
 
 ```
@@ -66,6 +68,7 @@ The `WORKDIR` variable (default: `.`) is bind-mounted into the container at `/wo
 │   └── entrypoint.sh     # Restores ~/.claude.json from backup before launching claude
 ├── pi/
 │   ├── Dockerfile        # Pi agent container image
+│   ├── extensions        # Pi extensions that are copied to the container and loaded via the entrypoint
 │   └── entrypoint.sh     # Launches pi directly
 └── src/
     ├── app-firewall.js   # Node.js fs hook (application-layer sandbox)

@@ -60,6 +60,9 @@ ENV NODE_OPTIONS="--require /usr/local/lib/app-firewall.js"
 COPY pi/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Copy our extensions over
+COPY pi/extensions /pi/agent/extensions
+
 FROM base AS release
 
 RUN npm install -g @earendil-works/pi-coding-agent
