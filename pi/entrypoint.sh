@@ -4,7 +4,7 @@
 set -e
 
 # Directory containing extensions
-EXTENSIONS_DIR="/workspace/pi/extensions"
+EXTENSIONS_DIR="/pi/agent/extensions"
 
 # Build the extension flags
 extension_args=""
