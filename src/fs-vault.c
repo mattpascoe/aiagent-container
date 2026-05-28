@@ -39,6 +39,10 @@ int is_blocked(const char *pathname) {
                 if (strstr(cmdline, "pi ") != NULL || strstr(cmdline, "/bin/pi") != NULL) {
                     return 0; // ALLOW
                 }
+                // Allow hermes agent to manage its own credential store
+                if (strstr(cmdline, "hermes") != NULL || strstr(cmdline, "/usr/local/bin/hermes") != NULL) {
+                    return 0; // ALLOW
+                }
             }
         }
         // Block all external utilities (cat, grep, tail) and custom agent scripts (node script.js)

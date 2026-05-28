@@ -9,6 +9,7 @@ x-common-env: &common-env
   PARANOID_MODE: ${PARANOID_MODE:-true}
   GIT_AUTHOR_NAME: ${GIT_NAME:-$REAL_USER}
   GIT_COMMITTER_NAME: ${GIT_NAME:-$REAL_USER}
+  TZ: America/Denver
 
 x-common-service: &common-service
   tty: true
@@ -45,8 +46,31 @@ services:
     tmpfs:
       - /tmp:noexec,nodev,nosuid,mode=1777
       - /home/node:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=755,noexec,nodev,nosuid
-#      - /home/node/.config:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=700,noexec,nodev,nosuid
-#      - /home/node/.npm:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=700,noexec,nodev,nosuid
+
+  hermes:
+    <<: *common-service
+    user: "root:root"
+    build:
+      context: .
+      dockerfile: hermes/Dockerfile
+      args:
+        - HOST_UID=${HOST_UID:-1000}
+        - HOST_GID=${HOST_GID:-1000}
+        - REAL_USER=${REAL_USER:-hermes}
+    image: local/${REAL_USER:-Unknown}-hermes
+    read_only: false # Hermes needs to be writable for lazy loading python modules or it logs a ton of errors trying.
+    environment:
+      <<: *common-env
+      HOME: /root
+      HERMES_DASHBOARD: 1
+      START_DASHBOARD: 1 # Start Hermes dashboard in background along side TUI. Used by entrypoint.sh
+    ports:
+      - "127.0.0.1:9119:9119" # Hermes dashboard on for docker host only as bound to 127.0.0.1
+    volumes:
+      - workspace:/workspace
+      - home_hermes:/root/.hermes
+    tmpfs:
+      - /tmp:noexec,nodev,nosuid,mode=1777
 
   pi:
     <<: *common-service
@@ -61,8 +85,6 @@ services:
     environment:
       <<: *common-env
       PI_CODING_AGENT_DIR: ~/.pi/agent
-      DCM_PATH: /opt/dev/${REAL_USER}
-      DCM_SSH_USER: aibot
     volumes:
       - workspace:/workspace
       - home_pi:/home/node/.pi
@@ -79,6 +101,13 @@ volumes:
       o: bind
       device: ~/.claude
 
+  home_hermes:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ~/.hermes
+
   home_pi:
     driver: local
     driver_opts:
@@ -92,9 +121,8 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${WORKDIR:-.}
+      device: ${WORKDIR}
 
 networks:
   ai_network:
     driver: bridge
-

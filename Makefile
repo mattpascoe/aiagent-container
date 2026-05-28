@@ -9,7 +9,7 @@ export COMPOSE_PROJECT_NAME := $(REAL_USER)
 
 export PARANOID_MODE ?= true
 export WORKDIR ?= .
-SVC ?= pi
+export SVC ?= pi
 
 
 usage:
@@ -39,9 +39,10 @@ usage:
 help: usage
 
 setup:
-	@mkdir -p ~/.claude
-	@chmod 755 ~/.claude
-	@chown -R $$HOST_UID:$$HOST_GID ~/.claude
+	@echo "\033[32mExecuting '\033[34m$(SVC)\033[32m' setup in workspace: \033[34m$(WORKDIR)\033[0m"
+	@mkdir -p ~/.$(SVC)
+	@chmod 755 ~/.$(SVC)
+	@chown -R $$HOST_UID:$$HOST_GID ~/.$(SVC)
 
 build: setup
 	docker compose build $(SVC)
@@ -50,13 +51,13 @@ update: setup
 	docker compose build --no-cache $(SVC)
 
 run: setup
-	docker compose run --rm $(SVC)
+	docker compose run --service-ports --rm $(SVC)
 
 run-args: setup
-	docker compose run --rm $(SVC) $(args)
+	docker compose run --service-ports --rm $(SVC) $(args)
 
 shell: setup
-	docker compose run --rm --entrypoint /bin/bash $(SVC)
+	docker compose run --service-ports --rm --entrypoint /bin/bash $(SVC)
 
 logs:
 	docker compose logs --tail=100 -f $(SVC)

@@ -8,8 +8,12 @@ A hardened Docker environment for running AI coding agents (`claude` and `pi`) w
 |---------|-------|-------|
 | `pi` | [Pi Coding Agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) (`@earendil-works/pi-coding-agent`) | `local/<user>-pi` |
 | `claude` | [Claude Code](https://claude.ai/code) (`@anthropic-ai/claude-code`) | `local/<user>-claude` |
+| `hermes` | [Hermes Agent](https://hermes-agent.nousresearch.com/) | `local/<user>-hermes` |
 
-Both services share the same base image, security hardening, and workspace volume.
+Services share the same base image, security hardening, and workspace volume.
+
+NOTE: Hermes is less restricted due to its base requirements. Treat it as less secure than the others. For now I'm not going to spend a bunch of time on it. Also I did not use their docker image since I wanted it to be as much like this structure as possible. This may prove to not be worth doing and I should just switch to their container. TBD on that.
+
 
 ## Security Architecture
 
