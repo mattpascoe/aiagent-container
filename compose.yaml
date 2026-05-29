@@ -31,32 +31,25 @@ services:
     build:
       context: .
       dockerfile: claude/Dockerfile
-      args:
-        - HOST_UID=${HOST_UID:-1000}
-        - HOST_GID=${HOST_GID:-1000}
-        - REAL_USER=${REAL_USER:-node}
     image: local/${REAL_USER:-Unknown}-claude
     environment:
       <<: *common-env
       DEVCONTAINER: true
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
-      - workspace:/workspace
-      - home_claude:/home/node/.claude
+      - ${WORKDIR}:/workspace
+      - ~/.claude:/home/node/.claude
     tmpfs:
       - /tmp:noexec,nodev,nosuid,mode=1777
       - /home/node:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=755,noexec,nodev,nosuid
 
   hermes:
     <<: *common-service
+    # for now just run as root. too much baggage to try and fix
     user: "root:root"
     build:
       context: .
       dockerfile: hermes/Dockerfile
-      args:
-        - HOST_UID=${HOST_UID:-1000}
-        - HOST_GID=${HOST_GID:-1000}
-        - REAL_USER=${REAL_USER:-hermes}
     image: local/${REAL_USER:-Unknown}-hermes
     read_only: false # Hermes needs to be writable for lazy loading python modules or it logs a ton of errors trying.
     environment:
@@ -67,61 +60,54 @@ services:
     ports:
       - "127.0.0.1:9119:9119" # Hermes dashboard on for docker host only as bound to 127.0.0.1
     volumes:
-      - workspace:/workspace
-      - home_hermes:/root/.hermes
+      - ${WORKDIR}:/workspace
+      - ~/.hermes:/root/.hermes
     tmpfs:
       - /tmp:noexec,nodev,nosuid,mode=1777
+
+  opencode:
+    <<: *common-service
+    build:
+      context: .
+      dockerfile: opencode/Dockerfile
+    image: local/${REAL_USER:-Unknown}-${SVC}
+    environment:
+      <<: *common-env
+    volumes:
+      - ${WORKDIR}:/workspace
+      # Have to map all the XDG directories for opencode
+      - ~/.config/opencode:/home/node/.config/opencode
+      - ~/.local/share/opencode:/home/node/.local/share/opencode
+      - ~/.local/state/opencode:/home/node/.local/state/opencode
+      - ~/.cache/opencode:/home/node/.cache/opencode
+    tmpfs:
+      - /tmp:exec,nodev,nosuid,mode=1777 # Note, had to make this exec so that opencode could run in the container
 
   pi:
     <<: *common-service
     build:
       context: .
       dockerfile: pi/Dockerfile
-      args:
-        - HOST_UID=${HOST_UID:-1000}
-        - HOST_GID=${HOST_GID:-1000}
-        - REAL_USER=${REAL_USER:-node}
     image: local/${REAL_USER:-Unknown}-pi
     environment:
       <<: *common-env
       PI_CODING_AGENT_DIR: ~/.pi/agent
     volumes:
-      - workspace:/workspace
-      - home_pi:/home/node/.pi
+      - ${WORKDIR}:/workspace
+      - ~/.pi:/home/node/.pi
     tmpfs:
       - /tmp:noexec,nodev,nosuid,mode=1777
       - /home/node/.config:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=700,noexec,nodev,nosuid
       - /home/node/.npm:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=700,noexec,nodev,nosuid
 
-volumes:
-  home_claude:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ~/.claude
-
-  home_hermes:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ~/.hermes
-
-  home_pi:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ~/.pi
-
-  workspace:
-    name: ${REAL_USER}_workspace_${SVC}
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${WORKDIR}
+# volumes:
+#   workspace:
+#     name: ${REAL_USER}_workspace_${SVC}
+#     driver: local
+#     driver_opts:
+#       type: none
+#       o: bind
+#       device: ${WORKDIR}
 
 networks:
   ai_network:

@@ -1,12 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Need at least node in context. Using a debian system as well.
-FROM node:22-bookworm-slim AS base
-
-ARG WORKSPACE_PATH=/workspace
-ARG REAL_USER=node
-ARG HOST_UID=1000
-ARG HOST_GID=1000
+FROM node:26-bookworm-slim AS base
 
 ENV NODE_ENV=production
 ENV DEBIAN_FRONTEND=noninteractive

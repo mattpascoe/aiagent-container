@@ -1,4 +1,4 @@
-.PHONY: build update run run-args clean purge shell setup usage help logs
+.PHONY: build update run run-args clean purge shell setup setup-common setup-% usage help logs
 .ONESHELL:
 
 # Gather the current users real username and UID/GID so we can use it within the container
@@ -6,6 +6,9 @@ export REAL_USER := $(or $(SUDO_USER),$(shell whoami))
 export HOST_UID := $(shell id -u $(REAL_USER))
 export HOST_GID := $(shell id -g $(REAL_USER))
 export COMPOSE_PROJECT_NAME := $(REAL_USER)
+
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
 
 export PARANOID_MODE ?= true
 export WORKDIR ?= .
@@ -38,25 +41,39 @@ usage:
 
 help: usage
 
-setup:
+setup-common:
 	@echo "\033[32mExecuting '\033[34m$(SVC)\033[32m' setup in workspace: \033[34m$(WORKDIR)\033[0m"
+
+# setup must be defined BEFORE the pattern rule
+setup: setup-common
 	@mkdir -p ~/.$(SVC)
 	@chmod 755 ~/.$(SVC)
-	@chown -R $$HOST_UID:$$HOST_GID ~/.$(SVC)
+	@chown -R $(HOST_UID):$(HOST_GID) ~/.$(SVC)
 
-build: setup
+# generic pattern rule
+setup-%: setup
+	@true
+
+# special-case override
+setup-opencode: setup-common
+	@mkdir -p ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode ~/.cache/opencode
+	@chmod 755 ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode ~/.cache/opencode
+	@chown -R $(HOST_UID):$(HOST_GID) ~/.config/opencode ~/.local/share/opencode ~/.local/state/opencode ~/.cache/opencode
+
+build: setup-$(SVC)
 	docker compose build $(SVC)
 
-update: setup
+update: setup-$(SVC)
 	docker compose build --no-cache $(SVC)
 
-run: setup
+# Using --service-ports so that things like hermes that have services listening inside can expose them to the host.
+run: setup-$(SVC)
 	docker compose run --service-ports --rm $(SVC)
 
-run-args: setup
+run-args: setup-$(SVC)
 	docker compose run --service-ports --rm $(SVC) $(args)
 
-shell: setup
+shell: setup-$(SVC)
 	docker compose run --service-ports --rm --entrypoint /bin/bash $(SVC)
 
 logs:

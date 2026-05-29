@@ -1,6 +1,10 @@
 # AI Harness
 
-A hardened Docker environment for running AI coding agents (`claude` and `pi`) with defense-in-depth security controls. The containers are read-only, run as a non-root user matching the host's UID/GID, and ship two complementary sandboxing layers to prevent agents from escaping their workspace or exfiltrating credentials.
+A hardened Docker environment for running AI coding agents with defense-in-depth security controls. The containers are read-only, run as a non-root user matching the host's UID/GID, and ship two complementary sandboxing layers to prevent agents from escaping their workspace or exfiltrating credentials.
+
+The goal is to make a simple way to just spin up a reasonably locked down container to isolate blast radius. You mount up one or more directories to actually work within. The configuration is stored in your home directory and mounted in from the host side so that it is persistent. While you could use that config from the host side, it is recommended to only run from within the container.
+
+Bottom line however, always treat the containers as a sandbox and do not trust them fully. They could still do weird things.
 
 ## Services
 
@@ -8,14 +12,19 @@ A hardened Docker environment for running AI coding agents (`claude` and `pi`) w
 |---------|-------|-------|
 | `pi` | [Pi Coding Agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) (`@earendil-works/pi-coding-agent`) | `local/<user>-pi` |
 | `claude` | [Claude Code](https://claude.ai/code) (`@anthropic-ai/claude-code`) | `local/<user>-claude` |
+| `opencode` | [OpenCode Agent](https://opencode.ai) (`@opencode-ai`) | `local/<user>-opencode` |
 | `hermes` | [Hermes Agent](https://hermes-agent.nousresearch.com/) | `local/<user>-hermes` |
 
 Services share the same base image, security hardening, and workspace volume.
 
 NOTE: Hermes is less restricted due to its base requirements. Treat it as less secure than the others. For now I'm not going to spend a bunch of time on it. Also I did not use their docker image since I wanted it to be as much like this structure as possible. This may prove to not be worth doing and I should just switch to their container. TBD on that.
 
+NOTE: Opencode does not store its info in a single dir under $HOME.  It has specific definitions to mount up the various XDG style directories that it uses.
+
 
 ## Security Architecture
+
+Note that not all images use these hardened features fully.
 
 ### 1. System Hardening
 - SUID/SGID bits stripped from all binaries at build time.
@@ -34,14 +43,12 @@ NOTE: Hermes is less restricted due to its base requirements. Treat it as less s
 ## Prerequisites
 
 - Docker with Compose v2
-- `~/.pi` directory for the `pi` service
-- `~/.claude` directory (created automatically by `make setup`) for the `claude` service
 - `ANTHROPIC_API_KEY` exported in your environment (for the `claude` service)
 
 ## Usage
 
 ```sh
-# Build the default service (pi)
+# Build the default service (pi with WORKDIR=`.`)
 make build
 
 # Build the claude service
@@ -57,9 +64,11 @@ make SVC=claude shell
 make update
 ```
 
-The `WORKDIR` variable (default: `.`) is bind-mounted into the container at `/workspace`.
+The `WORKDIR` variable (default: `.`) is bind-mounted into the container at `/workspace`. You will likely always want to provide a valid path to your project.
 
 For the claude environment, you would be asked every time for your configuration when you start the container, the `entrypoint.sh` is used to copy the latest .claude/backups file into .claude.json.  This is an imperfect hack to get around this. If you run the shell, you may want to run `/entrypoint.sh` to pick this up.
+
+All containers have a `/entrypoint.sh` even if it does not do anything extra. This is provided for consistency.
 
 ## Project Layout
 

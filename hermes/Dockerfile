@@ -3,11 +3,6 @@
 # Start with debian
 FROM debian:13.4 AS base
 
-ARG WORKSPACE_PATH=/workspace
-ARG REAL_USER=hermes
-ARG HOST_UID=10000
-ARG HOST_GID=10000
-
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NPM_CONFIG_LOGLEVEL=warn
 
