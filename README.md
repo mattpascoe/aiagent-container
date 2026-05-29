@@ -6,6 +6,8 @@ The goal is to make a simple way to just spin up a reasonably locked down contai
 
 Bottom line however, always treat the containers as a sandbox and do not trust them fully. They could still do weird things.
 
+Also, be aware that many of these harnesses offer their own docker container setup. THOSE ARE PROBABLY BETTER AND MORE MAINTAINED than this will ever be.  I'm doing it this way because I want consistent behavior between all the harnesses. This may prove to be a mess but its where I'm at in playing as of today.
+
 ## Services
 
 | Service | Agent | Image |
