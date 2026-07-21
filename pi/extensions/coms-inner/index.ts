@@ -572,7 +572,7 @@ export default function (pi: ExtensionAPI) {
 		const explicit = flags.explicit === true;
 		const session_id = ulid();
 
-		const defaultName = `agent-${session_id.slice(-6)}`;
+		const defaultName = `pi-${session_id.slice(-6)}`;
 		const desiredName = flags.name || fm.name || defaultName;
 		const name = resolveUniqueName(COMS_DIR, project, desiredName);
 		if (name !== desiredName) {
@@ -603,7 +603,7 @@ export default function (pi: ExtensionAPI) {
 			}
 		} catch (err) {
 			ctx.ui?.notify?.(
-				`📡 coms-inner: failed to create dirs — ${err instanceof Error ? err.message : String(err)}`,
+				`\uef60 coms-inner: failed to create dirs — ${err instanceof Error ? err.message : String(err)}`,
 				"error",
 			);
 			return;
@@ -614,7 +614,7 @@ export default function (pi: ExtensionAPI) {
 			server = await bindEndpoint(endpoint, connHandler, tracker);
 		} catch (err) {
 			ctx.ui?.notify?.(
-				`📡 coms-inner: bind failed — ${err instanceof Error ? err.message : String(err)}`,
+				`\uef60 coms-inner: bind failed — ${err instanceof Error ? err.message : String(err)}`,
 				"error",
 			);
 			return;
@@ -644,7 +644,7 @@ export default function (pi: ExtensionAPI) {
 			registryFile = writeRegistryEntry(COMS_DIR, project, entry);
 		} catch (err) {
 			ctx.ui?.notify?.(
-				`📡 coms-inner: registry write failed — ${err instanceof Error ? err.message : String(err)}`,
+				`\uef60 coms-inner: registry write failed — ${err instanceof Error ? err.message : String(err)}`,
 				"error",
 			);
 			try {
@@ -675,10 +675,13 @@ export default function (pi: ExtensionAPI) {
 
 		// 5. Surface presence in the UI.
 		try {
-			ctx.ui.setStatus("coms-inner", `📡 ${name}@${project}`);
+			// Force the nerd-font satellite icon to render white regardless of
+			// theme/terminal default fg — only the icon glyph is colored, the rest
+			// of the status text keeps the footer's normal (dim) styling.
+			ctx.ui.setStatus("coms", `\x1b[97m\x1b[39m ${name}@${project}`);
 			installPoolWidget(ctx);
 			ctx.ui.notify(
-				`📡 coms-inner ready · ${name}@${project} · container ${CONTAINER_ID}`,
+				`\uef60 coms ready · ${name}@${project} · container ${CONTAINER_ID}`,
 				"info",
 			);
 		} catch {
@@ -808,9 +811,9 @@ export default function (pi: ExtensionAPI) {
 		// usable space.
 		const safeWidth = Math.max(20, width - 2);
 		// Build top border so its visible width equals safeWidth exactly.
-		// `┏━ coms-inner ━…━┓` → 1+1+1+11 chars = 14 for the leading label
-		// plus the corners. Compute the dash run to fill the rest.
-		const topLabel = "┏━ coms-inner ";
+		// `┏━ coms [project] ━…━┓` — compute the dash run to fill the rest based
+		// on the label's actual visible width (handles box-drawing chars correctly).
+		const topLabel = `┏━ coms [${projectFilter}] `;
 		const topDashes = Math.max(0, safeWidth - visibleWidth(topLabel) - 1); // -1 for closing ┓
 		const topBorder = topLabel + "━".repeat(topDashes) + "┓";
 		const botDashes = Math.max(0, safeWidth - 2); // ┗ + ┛
