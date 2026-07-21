@@ -195,12 +195,10 @@ async function handleLine(sock: net.Socket, line: string): Promise<void> {
       purpose: ident.purpose,
       model: ident.model ?? "unknown",
       color: ident.color ?? "",
-      // Not observable from here — see the note on writeSelfEntry. AgentCard
-      // requires a number, so we send 0 rather than break the peer's parse;
-      // it means "unknown", not "idle". Making this optional in the shared
-      // protocol would be the correct fix, but that is a spec change both
-      // adapters have to agree on, not something to do unilaterally.
-      context_used_pct: 0,
+      // context_used_pct deliberately omitted — not observable from here (see
+      // the note on writeSelfEntry). Per the protocol's optional-field rule,
+      // absent means "unknown, receiver applies its own fallback"; sending 0
+      // would claim an empty context.
       queue_depth: inFlight,
     };
     const pong: PongFrame = {

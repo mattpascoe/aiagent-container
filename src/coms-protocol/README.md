@@ -31,6 +31,38 @@ or any other Node.js process.
 - **Atomic writes** via `write-to-tmp + rename` so concurrent readers
   (`coms_list`) never see a half-written registry file.
 
+## Optional fields: unset means "the receiver decides"
+
+Adapters differ in what they can observe about themselves. Pi runs its coms
+extension in-process and can read live context usage; the Claude adapter
+answers each inbound prompt in a separate short-lived subprocess, so no such
+number exists for it to report. The protocol has to accommodate both without
+either side inventing data.
+
+The rule, for every optional field in `envelopes.ts`:
+
+> **Unset means "unknown — receiver applies its own fallback." It never means
+> zero, empty, or a default value chosen by the sender.**
+
+Concretely:
+
+- **Senders** must omit a field they cannot determine. Do **not** send `0`,
+  `""`, or a placeholder to satisfy a type. A wrong value that looks right is
+  worse than an absent one: `context_used_pct: 0` reads as "idle", and
+  `color: ""` renders as garbage in any consumer that doesn't guard.
+- **Receivers** must treat `undefined` and `null` identically, and must
+  supply their own fallback — `"?%"`, a derived colour, a dash. Guard with
+  `x != null` rather than truthiness, so a legitimate `0` still displays.
+- **Never** let an absent value reach a formatter. That is how you get `NaN%`
+  and `#NaNNaNNaN` in a peer list.
+
+Fields governed by this rule: `AgentCard.context_used_pct`,
+`RegistryEntry.context_used_pct`, `RegistryEntry.queue_depth`. `model`,
+`color`, `name` and `purpose` are required strings; senders that cannot
+determine one should send a meaningful placeholder (`"unknown"`, a default
+colour) rather than an empty string, since an empty string is a value and
+receivers will faithfully render it.
+
 ## Build
 
 This module is consumed in source form (the Pi extension uses Bun's native

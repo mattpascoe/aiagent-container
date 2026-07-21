@@ -88,7 +88,15 @@ export interface AgentCard {
 	purpose: string;
 	model: string;
 	color: string;
-	context_used_pct: number;
+	// Optional: not every adapter can observe its own context usage. Pi reads
+	// it in-process from the harness; the Claude adapter answers each prompt in
+	// a separate stateless subprocess, so no such number exists for it.
+	//
+	// Omit when unknown — do NOT send 0, which reads as "idle" rather than
+	// "unknown". Receivers must guard with `!= null` (not truthiness, so a real
+	// 0 still displays) and apply their own fallback. See "Optional fields" in
+	// this module's README.
+	context_used_pct?: number;
 	queue_depth: number;
 }
 

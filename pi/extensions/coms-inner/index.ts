@@ -132,7 +132,12 @@ interface PeerCard {
 	purpose: string;
 	model: string;
 	color: string;
-	context_used_pct: number;
+	// number | null, not number: AgentCard.context_used_pct is optional in the
+	// protocol (some adapters, e.g. Claude's stateless-subprocess bridge, have
+	// no such number to report). null means "unknown" — never coerce to 0,
+	// which would misread as "idle" in the widget. Guard downstream reads with
+	// `!= null`, not truthiness.
+	context_used_pct: number | null;
 	queue_depth: number;
 	staleCount: number;
 	lastSeenMs: number;
@@ -179,6 +184,14 @@ function hexFg(hex: string | undefined, s: string): string {
 	const g = parseInt(hex.slice(3, 5), 16);
 	const b = parseInt(hex.slice(5, 7), 16);
 	return `\x1b[38;2;${r};${g};${b}m${s}\x1b[39m`;
+}
+
+function currentContextPct(ctx: ExtensionContext | null | undefined): number | undefined {
+	// Per coms-protocol: omit context_used_pct when genuinely unknown (no
+	// model, no context window, no post-compaction usage yet) rather than
+	// substituting 0, which reads as "idle" to receivers.
+	const usage = ctx?.getContextUsage()?.percent;
+	return usage != null ? Math.round(usage) : undefined;
 }
 
 function fallbackColor(sessionId: string): string {
@@ -507,13 +520,13 @@ export default function (pi: ExtensionAPI) {
 	function handlePing(socket: import("node:net").Socket, _env: PingEnvelope): void {
 		const ctx = currentCtx;
 		const ident = identity;
-		const pct = Math.round(ctx?.getContextUsage()?.percent ?? 0);
+		const pct = currentContextPct(ctx);
 		const card: AgentCard = {
 			name: ident?.name ?? "unknown",
 			purpose: ident?.purpose ?? "",
 			model: ctx?.model?.id ?? ident?.model ?? "unknown",
 			color: ident?.color ?? "#36F9F6",
-			context_used_pct: pct,
+			...(pct != null ? { context_used_pct: pct } : {}),
 			queue_depth: inboundQueue.size,
 		};
 		const pong: PongFrame = { type: "pong", msg_id: _env.msg_id, agent_card: card };
@@ -623,7 +636,7 @@ export default function (pi: ExtensionAPI) {
 			container_id: CONTAINER_ID,
 			transport: "uds",
 			heartbeat_at: nowIso(),
-			context_used_pct: Math.round(ctx.getContextUsage()?.percent ?? 0),
+			...(currentContextPct(ctx) != null ? { context_used_pct: currentContextPct(ctx) } : {}),
 			queue_depth: 0,
 		};
 		let registryFile: string;
@@ -701,7 +714,7 @@ export default function (pi: ExtensionAPI) {
 					container_id: identity.container_id,
 					transport: "uds",
 					heartbeat_at: nowIso(),
-					context_used_pct: Math.round(ctx?.getContextUsage()?.percent ?? 0),
+					...(currentContextPct(ctx) != null ? { context_used_pct: currentContextPct(ctx) } : {}),
 					queue_depth: inboundQueue.size,
 				};
 				// Detect missing-registry BEFORE writing so the self_heal audit
@@ -892,7 +905,15 @@ export default function (pi: ExtensionAPI) {
 				const { peer, pong } = r.value;
 				seenSessions.add(peer.session_id);
 				const prev = peerCards.get(peer.session_id);
-				const next: PeerCard = { ...pong, staleCount: 0, lastSeenMs: Date.now() };
+				const next: PeerCard = {
+					...pong,
+					// AgentCard.context_used_pct is optional; normalize absent to null
+					// rather than letting `undefined` slip through (and never default
+					// to 0 — that reads as "idle" in the widget, not "unknown").
+					context_used_pct: pong.context_used_pct ?? null,
+					staleCount: 0,
+					lastSeenMs: Date.now(),
+				};
 				if (
 					!prev ||
 					prev.name !== next.name ||
@@ -1015,7 +1036,7 @@ export default function (pi: ExtensionAPI) {
 					cwd: c.entry.cwd,
 					project: c.project,
 					alive: pong != null,
-					context_used_pct: pong ? pong.context_used_pct : null,
+					context_used_pct: pong?.context_used_pct ?? null,
 					color: c.entry.color,
 				};
 			});
