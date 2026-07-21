@@ -57,6 +57,43 @@ FROM base AS release
 
 RUN npm install -g @anthropic-ai/claude-code
 
+# -----------------------------------------------------------------------------
+# agentharness-comms (cross-container agent communication)
+#
+# Wires Claude Code into the shared ~/.agentharness-comms directory so it
+# can talk to peer agents in other containers. Two pieces:
+#
+#   1. `claude/coms-mcp-server/` — MCP server (stdio) + inbound listener.
+#      Built during image build so no committed JS artifacts in the repo.
+#      Imports the shared wire protocol from `src/coms-protocol/`.
+#
+#   2. `src/coms-protocol/` — the protocol module itself. Vendored into the
+#      image at the same relative path so the compiled listener's
+#      `../../../src/coms-protocol/index.js` import resolves at runtime.
+#
+# NODE_ENV=development is required so devDependencies (typescript) are
+# installed; NODE_ENV=production at runtime is fine.
+#
+# After `tsc`, prune rather than `rm -rf node_modules`: the compiled server
+# imports `@modelcontextprotocol/sdk` bare at runtime, so wiping node_modules
+# outright leaves the MCP server unable to start (ERR_MODULE_NOT_FOUND).
+# -----------------------------------------------------------------------------
+COPY src/coms-protocol /src/coms-protocol
+COPY claude/coms-mcp-server /claude/coms-mcp-server
+RUN cd /claude/coms-mcp-server \
+    && NODE_ENV=development npm install \
+    && ./node_modules/.bin/tsc \
+    && npm prune --omit=dev \
+    && rm -f package-lock.json
+ENV AGENTHARNESS_COMMS_BIN=/claude/coms-mcp-server/dist/claude/coms-mcp-server/src/cli.js
+
+# Ensure the shared coms dir exists and is writable by `node` (the runtime
+# user). `~/.agentharness-comms` is bind-mounted from the host in
+# compose.yaml, so this only matters for builds / dev runs without mounts.
+RUN mkdir -p /home/node/.agentharness-comms \
+    && chown -R node:node /home/node/.agentharness-comms
+ENV COMS_DIR=/home/node/.agentharness-comms
+
 USER node
 
 WORKDIR /workspace

@@ -36,9 +36,17 @@ services:
       <<: *common-env
       DEVCONTAINER: true
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # agentharness-comms: container-scoped agent identity, optional overrides
+      AGENTHARNESS_CNAME: ${CLAUDE_CNAME:-}
+      AGENTHARNESS_PURPOSE: ${CLAUDE_PURPOSE:-}
+      AGENTHARNESS_COLOR: ${CLAUDE_COLOR:-}
+      # Coms project namespace. Defaults to basename of WORKDIR (set by the
+      # Makefile); claude-role also passes this explicitly via -e.
+      AGENTHARNESS_PROJECT: ${PROJECT:-}
     volumes:
       - ${WORKDIR}:/workspace
       - ~/.claude:/home/node/.claude
+      - ~/.agentharness-comms:/home/node/.agentharness-comms
     tmpfs:
       - /tmp:noexec,nodev,nosuid,mode=1777
       - /home/node:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=755,noexec,nodev,nosuid
@@ -92,9 +100,14 @@ services:
     environment:
       <<: *common-env
       PI_CODING_AGENT_DIR: ~/.pi/agent
+      # agentharness-comms: container-scoped agent identity, optional overrides
+      AGENTHARNESS_CNAME: ${PI_CNAME:-}
+      AGENTHARNESS_PURPOSE: ${PI_PURPOSE:-}
+      AGENTHARNESS_COLOR: ${PI_COLOR:-}
     volumes:
       - ${WORKDIR}:/workspace
       - ~/.pi:/home/node/.pi
+      - ~/.agentharness-comms:/home/node/.agentharness-comms
     tmpfs:
       - /tmp:noexec,nodev,nosuid,mode=1777
       - /home/node/.config:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000},mode=700,noexec,nodev,nosuid

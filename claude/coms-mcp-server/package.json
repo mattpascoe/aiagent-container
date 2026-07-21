@@ -1,0 +1,28 @@
+{
+  "name": "agentharness-comms-claude",
+  "version": "1.0.0",
+  "description": "Claude Code MCP server for cross-container agent communication",
+  "type": "module",
+  "main": "dist/server.js",
+  "bin": {
+    "agentharness-comms-claude": "dist/cli.js",
+    "agentharness-comms-merge-mcp": "dist/merge-mcp.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "listener": "node dist/cli.js listener",
+    "merge-mcp": "node dist/merge-mcp.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

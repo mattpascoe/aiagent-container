@@ -76,19 +76,72 @@ All containers have a `/entrypoint.sh` even if it does not do anything extra. Th
 
 ```
 .
-├── compose.yaml          # Docker Compose service definitions
-├── Makefile              # Build / run helpers
+├── compose.yaml                # Docker Compose service definitions
+├── Makefile                    # Build / run helpers
+├── agent-roles/                # Reusable agent role files (frontmatter + system prompt); see agent-roles/README.md
 ├── claude/
-│   ├── Dockerfile        # Claude Code container image
-│   └── entrypoint.sh     # Restores ~/.claude.json from backup before launching claude
+│   ├── Dockerfile              # Claude Code container image
+│   ├── entrypoint.sh           # Restores ~/.claude.json, starts coms listener, generates .mcp.json, execs claude
+│   └── coms-mcp-server/        # Node.js MCP server + inbound listener (built during Docker build)
 ├── pi/
-│   ├── Dockerfile        # Pi agent container image
-│   ├── extensions        # Pi extensions that are copied to the container and loaded via the entrypoint
-│   └── entrypoint.sh     # Launches pi directly
-└── src/
-    ├── app-firewall.js   # Node.js fs hook (application-layer sandbox)
-    └── fs-vault.c        # LD_PRELOAD syscall hook (OS-layer sandbox)
+│   ├── Dockerfile              # Pi agent container image
+│   ├── extensions              # Pi extensions that are copied to the container and loaded via the entrypoint
+│   │   └── coms-inner/         # Cross-container agent communication extension
+│   └── entrypoint.sh           # Launches pi directly
+├── src/
+│   ├── app-firewall.js         # Node.js fs hook (application-layer sandbox)
+│   ├── coms-protocol/          # Shared wire protocol (envelopes, transport, registry) for cross-container agent coms
+│   └── fs-vault.c              # LD_PRELOAD syscall hook (OS-layer sandbox)
+└── docs/
+    ├── agentharness-comms.md   # User-facing usage guide for the cross-container agent comms system
+    └── coms-inner-plan.md      # Design + progress for the agentharness-comms system
 ```
+
+## Cross-container Agent Communication (agentharness-comms)
+
+The Pi and Claude containers can talk to each other over a shared Unix
+domain socket directory. Both write to `~/.agentharness-comms` (a
+host bind-mount), with each container namespacing its socket by
+container ID (`<COMS_DIR>/sockets/<container_id>/<session_id>.sock`).
+
+**How it works:**
+
+- **Pi side:** `pi/extensions/coms-inner/` — a Pi extension that
+  exposes `coms_list`, `coms_send`, `coms_get`, `coms_await` tools
+  to the LLM, manages a pool widget showing peer agents, and
+  heartbeats its own registry entry every 10s.
+- **Claude side:** `claude/coms-mcp-server/` — a Node.js project
+  shipping as two cooperating processes plus one bootstrap helper:
+  1. **MCP server** (stdio) that exposes the same 4 tools to
+     Claude Code via the Model Context Protocol.
+  2. **Inbound listener** (background, spawned by the container
+     entrypoint) that holds the UDS, registers in the shared pool,
+     and answers inbound prompts by shelling out to
+     `claude --print --output-format json [--resume <sid>] "<prompt>"`,
+     preserving conversation continuity across multiple inbound
+     messages.
+  3. **`merge-mcp.js`** bootstrap helper that idempotently merges
+     our MCP server entry into `~/.claude.json` under the
+     `mcpServers` key (user-scope, applies across all projects,
+     no workspace trust needed, no `.mcp.json` in the workspace).
+- **Shared protocol:** `src/coms-protocol/` — newline-delimited JSON
+  envelopes over UDS, heartbeat-based liveness (PID-signal can't cross
+  container PID namespaces), per-project registry layout, per-project
+  DLQ for offline-peer delivery, shared `audit.log`.
+
+**Tool surface (identical for both adapters):**
+
+| Tool | What it does |
+|---|---|
+| `coms_list` | Discover peers (`project="*"` scans all projects; `include_explicit=true`) |
+| `coms_send` | Send a prompt to a named peer; returns a `msg_id`. Offline peers get DLQ'd. |
+| `coms_get` | Drain DLQ for this session. Non-blocking. |
+| `coms_await` | Poll until a `response` for one of the given `msg_ids` arrives, or timeout. |
+
+See [`docs/agentharness-comms.md`](docs/agentharness-comms.md) for the
+full user-facing usage guide (launch examples, orchestrator patterns,
+troubleshooting), or [`docs/coms-inner-plan.md`](docs/coms-inner-plan.md)
+for the design and implementation history.
 
 ## Environment Variables
 

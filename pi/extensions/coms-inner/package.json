@@ -1,0 +1,14 @@
+{
+	"name": "coms-inner-extension",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Pi extension that exposes cross-container agent communication (coms-inner).",
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"typescript": "^5.6.0",
+		"@types/node": "^22.0.0"
+	}
+}

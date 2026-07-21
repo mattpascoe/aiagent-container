@@ -58,6 +58,20 @@ RUN chmod +x /entrypoint.sh
 # Copy our extensions over
 COPY pi/extensions /pi/agent/extensions
 
+# -----------------------------------------------------------------------------
+# agentharness-comms shared protocol module
+#
+# The coms-inner extension is at /pi/agent/extensions/coms-inner/index.ts
+# and imports `../../../src/coms-protocol/index.ts`. That relative path
+# resolves to /pi/src/coms-protocol/, so we mirror the source tree there.
+# We do NOT put it at /src/coms-protocol because /pi/agent/extensions/
+# only has 3 levels of `..` to escape, not 4.
+# -----------------------------------------------------------------------------
+COPY src/coms-protocol /pi/src/coms-protocol
+ENV COMS_DIR=/home/node/.agentharness-comms
+RUN mkdir -p /home/node/.agentharness-comms \
+    && chown -R node:node /home/node/.agentharness-comms
+
 FROM base AS release
 
 RUN npm install -g @earendil-works/pi-coding-agent
