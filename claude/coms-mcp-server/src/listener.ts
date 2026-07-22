@@ -46,6 +46,7 @@ import {
 } from "../../../src/coms-protocol/index.js";
 import {
   resolveIdentity,
+  resolveModel,
   loadSessionRecord,
   saveSessionRecord,
 } from "./identity.js";
@@ -110,7 +111,18 @@ function writeSelfEntry(reason: "boot" | "heartbeat"): void {
     session_id,
     name: ident.name,
     purpose: ident.purpose,
-    model: ident.model ?? "unknown",
+    // Re-resolved every call, NOT ident.model. ident is captured once at
+    // process boot (see the top-level `const ident = resolveIdentity()`
+    // above), and the entrypoint starts this listener before Claude Code —
+    // and its status line, the source of the resolved model id — has run
+    // even once. Reading ident.model here would cache whatever fallback
+    // resolveModel() produced at that first instant (the settings.json
+    // alias, e.g. "sonnet") for the rest of this process's life, forever
+    // missing the real id once the status line starts writing it a few
+    // seconds later. That was a real bug: it survived a full rebuild and
+    // restart, because the race is identical every time the listener boots
+    // before the status line has run.
+    model: resolveModel(ident.coms_dir, ident.container_id),
     color: ident.color ?? "",
     pid: process.pid,
     endpoint,
@@ -193,7 +205,8 @@ async function handleLine(sock: net.Socket, line: string): Promise<void> {
     const card: AgentCard = {
       name: ident.name,
       purpose: ident.purpose,
-      model: ident.model ?? "unknown",
+      // Re-resolved fresh, same reasoning as writeSelfEntry — see there.
+      model: resolveModel(ident.coms_dir, ident.container_id),
       color: ident.color ?? "",
       // context_used_pct deliberately omitted — not observable from here (see
       // the note on writeSelfEntry). Per the protocol's optional-field rule,
@@ -420,10 +433,19 @@ function framePrompt(prompt: PromptEnvelope): string {
  * Shell out to `claude --print` and return its text reply. Reuses the
  * persisted session via --resume so a peer holding a conversation with us
  * keeps continuity across separate inbound prompts.
+ *
+ * --strict-mcp-config (with no --mcp-config) makes this a zero-MCP-server
+ * invocation. Without it, this subprocess loads ~/.claude.json's mcpServers
+ * entry same as any other Claude Code launch — which includes OUR OWN coms
+ * MCP server, spinning up a second, nested instance of it that this one-shot
+ * process has no use for: framePrompt already tells it not to call any coms
+ * tools, and it exits right after answering. Verified this drops a real
+ * mcp_boot from the audit log per invocation, with no effect on native tools
+ * (Bash/Read/etc. — the flag only touches MCP autoload).
  */
 function runClaude(promptText: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const args = ["--print", "--output-format", "json"];
+    const args = ["--print", "--strict-mcp-config", "--output-format", "json"];
     if (claude_session_id) {
       args.push("--resume", claude_session_id);
     }

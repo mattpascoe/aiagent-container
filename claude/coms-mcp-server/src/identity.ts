@@ -58,18 +58,45 @@ const DEFAULT_COLOR = "#D97757";
  *
  * Unlike pi — which reads the live model id from its in-process context — we
  * have no running model to interrogate: the listener is a plain node process
- * and each answer is a separate `claude` subprocess. So we report what is
- * *configured*: ANTHROPIC_MODEL if set, else the `model` key from
- * ~/.claude/settings.json.
+ * and each answer is a separate `claude` subprocess.
  *
- * A bare alias like "opus" is namespaced to "anthropic/opus" to match the
- * `vendor/model` convention peers already use. Deliberately not resolved to a
- * concrete version id (e.g. claude-opus-4-8) — we cannot verify which version
- * the CLI will actually select, and a precise-looking wrong answer is worse
- * than an honest coarse one.
+ * Best source, checked first: <coms_dir>/sessions/<container_id>/resolved_model.txt,
+ * written by statusline.sh from `.model.id` on every invocation (refreshed
+ * every ~5s and on every message). That JSON field is the one place Claude
+ * Code exposes the actually-resolved model id — no hook but SessionStart ever
+ * receives a `model` field, there's no $CLAUDE_MODEL env var, and
+ * settings.json's "model" key is often just the bare alias the user typed at
+ * the /model prompt (e.g. "sonnet"), not the resolved id. That mismatch is
+ * exactly what produced "anthropic/sonnet" here while every peer configured
+ * another way reported "anthropic/claude-sonnet-5".
+ *
+ * Falls back to ANTHROPIC_MODEL, then the settings.json alias, then
+ * "unknown" — unchanged from before, for sessions where the status line
+ * hasn't run yet (e.g. immediately at listener boot) or isn't configured.
+ *
+ * A bare alias is namespaced to `anthropic/<alias>` to match the
+ * `vendor/model` convention peers already use.
  */
-function resolveModel(): string {
-  let raw = readEnv("ANTHROPIC_MODEL");
+/**
+ * Exported (not just used internally by resolveIdentity) so callers that
+ * need a FRESH read — not the value cached in a long-lived ResolvedIdentity
+ * — can call it directly. The listener is exactly such a caller: see the
+ * comment at its `ident.model` usage for why.
+ */
+export function resolveModel(comsDir: string, containerId: string): string {
+  let raw: string | undefined;
+  try {
+    raw = fs
+      .readFileSync(
+        path.join(comsDir, "sessions", containerId, "resolved_model.txt"),
+        "utf8",
+      )
+      .trim();
+    if (!raw) raw = undefined;
+  } catch {
+    /* status line hasn't written one yet — fall through */
+  }
+  raw ??= readEnv("ANTHROPIC_MODEL");
   if (!raw) {
     try {
       const home = process.env.HOME || os.homedir();
@@ -130,7 +157,7 @@ export function resolveIdentity(opts?: {
     readCliFlag("purpose") ??
     readEnv("AGENTHARNESS_PURPOSE") ??
     "";
-  const model = opts?.model ?? resolveModel();
+  const model = opts?.model ?? resolveModel(coms_dir, container_id);
   const explicitFlag = readCliFlag("explicit");
   const explicit =
     opts?.explicit ?? (explicitFlag === "true" || explicitFlag === "");

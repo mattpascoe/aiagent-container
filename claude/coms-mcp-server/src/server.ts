@@ -280,10 +280,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 /**
- * Poll DLQ every 500ms until either a matching response arrives or timeout.
- * Because we don't hold an inbound UDS connection from this MCP-server side
- * (the listener does), responses from peers land in our project's DLQ and
- * we drain them here.
+ * How often to re-check the DLQ while awaiting a reply. This is pure added
+ * latency on top of however long the peer actually takes to answer — there's
+ * no way to be notified the instant a file appears (that would be fs.watch,
+ * deliberately not used yet: unreliable on some Docker/overlay filesystems),
+ * so every tick we don't check is time a reply could have been sitting there
+ * already. 75ms keeps the tax small without turning this into a busy-loop.
+ */
+const AWAIT_POLL_MS = 75;
+
+/**
+ * Poll the DLQ until either a matching response arrives or timeout. Because
+ * we don't hold an inbound UDS connection from this MCP-server side (the
+ * listener does), responses from peers land in our project's DLQ and we
+ * drain them here.
  */
 async function awaitResponseImpl(
   msgIds: string[],
@@ -326,7 +336,7 @@ async function awaitResponseImpl(
       // that simply aren't the reply we're blocking on — deleting them here
       // would silently destroy traffic coms_get is expected to return.
     }
-    await new Promise((r) => setTimeout(r, Math.min(500, remaining)));
+    await new Promise((r) => setTimeout(r, Math.min(AWAIT_POLL_MS, remaining)));
   }
   return {
     response: null,

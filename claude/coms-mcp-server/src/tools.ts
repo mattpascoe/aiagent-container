@@ -137,7 +137,15 @@ export function sendPrompt(
   const includeExplicit = opts.include_explicit ?? false;
 
   // Resolve target. Look across all projects if "*", else scope.
+  //
+  // Also capture our own entry here if this scan happens to pass through
+  // ident.project (true whenever projectFilter is "*" or equals our own
+  // project — i.e. almost always). That saves the separate full registry
+  // scan resolveSelf() would otherwise do below for the same directory we
+  // just read. Matched by name, same criterion resolveSelf() uses, so a
+  // self-lookup this way is behaviorally identical to calling it directly.
   let candidates: { entry: RegistryEntry; project: string }[] = [];
+  let selfEntry: RegistryEntry | undefined;
   if (projectFilter === "*") {
     const root = projectsRoot(ident.coms_dir);
     let projects: string[];
@@ -148,6 +156,9 @@ export function sendPrompt(
     }
     for (const p of projects) {
       const entries = readAllRegistryEntries(ident.coms_dir, p);
+      if (p === ident.project) {
+        selfEntry = entries.find((e) => e.name === ident.name);
+      }
       for (const e of entries) {
         if (e.name === targetName && (includeExplicit || !e.explicit)) {
           candidates.push({ entry: e, project: p });
@@ -156,6 +167,9 @@ export function sendPrompt(
     }
   } else {
     const entries = readAllRegistryEntries(ident.coms_dir, projectFilter);
+    if (projectFilter === ident.project) {
+      selfEntry = entries.find((e) => e.name === ident.name);
+    }
     for (const e of entries) {
       if (e.name === targetName && (includeExplicit || !e.explicit)) {
         candidates.push({ entry: e, project: projectFilter });
@@ -182,7 +196,14 @@ export function sendPrompt(
   // Return address, taken from the entry our listener registered. Without
   // this the peer has nowhere to send its reply: it falls back to the DLQ
   // keyed on an empty target_session, which no drain can ever match.
-  const self = resolveSelf(ident);
+  //
+  // Only falls through to resolveSelf()'s own scan when the target lookup
+  // above didn't happen to pass through ident.project — i.e. projectFilter
+  // named some other specific project directly, not "*" and not ours.
+  const self =
+    selfEntry && selfEntry.session_id && selfEntry.endpoint
+      ? { session_id: selfEntry.session_id, endpoint: selfEntry.endpoint }
+      : resolveSelf(ident);
   if (!self) {
     throw new Error(
       `cannot send: no registry entry for "${ident.name}" in project "${ident.project}" — ` +
