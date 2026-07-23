@@ -139,6 +139,27 @@ export interface RegistryEntry {
 	queue_depth?: number; // live snapshot
 }
 
+// ━━━ Pending send (filesystem, NOT on the wire) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//
+// Written by the sender when `coms_send` fires, at
+// `<COMS_DIR>/projects/<project>/pending/<msg_id>.json`. Cleared by the
+// sender once a matching reply is drained (via coms_await or coms_get).
+//
+// This exists purely to let a stateless renderer (the status-line pool box)
+// know "I am currently waiting on a reply from this peer" — the MCP server
+// process that runs coms_send/coms_await is not the same process that draws
+// the status line, so this is the only channel between them, same reason the
+// registry and DLQ are file-based.
+
+export interface PendingSendEntry {
+	msg_id: string;
+	sender_container_id: string;
+	sender_session_id: string;
+	target_name: string;
+	target_container_id: string;
+	sent_at: string; // ISO 8601
+}
+
 // ━━━ Shared audit log line shape ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // Both adapters append one JSON line per notable event to

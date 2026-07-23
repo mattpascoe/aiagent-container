@@ -33,6 +33,8 @@ import {
   projectsRoot,
   sendEnvelope,
   writeToDLQ,
+  writePendingSend,
+  prunePendingSends,
   type RegistryEntry,
   type Envelope,
   type PromptEnvelope,
@@ -221,6 +223,19 @@ export function sendPrompt(
     sender_name: ident.name,
     sender_cwd: process.env.CLAUDE_PROJECT_DIR ?? process.cwd(),
   };
+
+  // Record that we're now waiting on a reply from this peer, so the (separate
+  // process) status-line pool renderer can show it — see pool.ts. Written
+  // regardless of delivered/queued outcome below: either way we're waiting.
+  writePendingSend(ident.coms_dir, targetProject, {
+    msg_id,
+    sender_container_id: ident.container_id,
+    sender_session_id: self.session_id,
+    target_name: targetName,
+    target_container_id: target.container_id,
+    sent_at: envelope.timestamp,
+  });
+  prunePendingSends(ident.coms_dir, targetProject, 15 * 60 * 1000);
 
   const live = isEntryLiveFromEntry(target);
   if (!live) {

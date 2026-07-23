@@ -135,12 +135,20 @@ function writeSelfEntry(reason: "boot" | "heartbeat"): void {
     heartbeat_at: new Date().toISOString(),
     queue_depth: inFlight,
   });
-  appendAudit(ident.coms_dir, {
-    event: "registry_write",
-    session_id,
-    path: path.join(ident.coms_dir, "projects", ident.project, "agents", `${ident.name}.json`),
-    reason,
-  });
+  // Only audit the boot write. Heartbeat writes happen every 10s for the
+  // life of the process and carry no information beyond "still alive" —
+  // logging one every tick drowns out everything else in audit.log (in
+  // practice >95% of all lines). Liveness is already inferrable from the
+  // registry file's own mtime/heartbeat_at; the audit log doesn't need to
+  // duplicate it on a timer.
+  if (reason === "boot") {
+    appendAudit(ident.coms_dir, {
+      event: "registry_write",
+      session_id,
+      path: path.join(ident.coms_dir, "projects", ident.project, "agents", `${ident.name}.json`),
+      reason,
+    });
+  }
 }
 
 // Heartbeat: refresh our registry entry every 10s.

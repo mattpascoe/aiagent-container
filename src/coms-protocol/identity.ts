@@ -138,6 +138,14 @@ export function dlqDir(comsDir: string, project: string): string {
 }
 
 /**
+ * Computes the pending-sends directory for a project — one file per
+ * in-flight outbound send, keyed by msg_id. See `PendingSendEntry`.
+ */
+export function pendingSendsDir(comsDir: string, project: string): string {
+	return path.join(comsDir, "projects", project, "pending");
+}
+
+/**
  * Computes the audit log path (shared, append-only JSONL).
  */
 export function auditLogPath(comsDir: string): string {

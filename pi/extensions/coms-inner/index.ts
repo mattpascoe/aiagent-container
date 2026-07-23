@@ -111,6 +111,19 @@ const FALLBACK_PALETTE = [
 	"#C792EA", "#FF8B39", "#4D9DE0", "#FFAA8B",
 ];
 
+// Nerd-font glyphs for "we have an outbound coms_send pending with this
+// peer" — same codepoints the Claude-side pool.ts uses, so the two adapters
+// read consistently: clock (waiting, no confirmation of activity), spinner
+// (processing, corroborated by the peer's own queue_depth), warning triangle
+// (pending request, peer unreachable).
+const GLYPH_PENDING_WAITING = "";
+const GLYPH_PENDING_PROCESSING = "";
+const GLYPH_PENDING_UNREACHABLE = "";
+const ANSI_DIM = "\x1b[2;37m";
+const ANSI_YELLOW = "\x1b[93m";
+const ANSI_RED = "\x1b[91m";
+const ANSI_RESET = "\x1b[0m";
+
 // ━━━ Internal state shapes ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 interface Identity {
@@ -756,6 +769,7 @@ export default function (pi: ExtensionAPI) {
 
 		interface Row {
 			name: string;
+			sessionId: string;
 			container: string;
 			model: string;
 			color: string;
@@ -772,6 +786,7 @@ export default function (pi: ExtensionAPI) {
 			seenSessions.add(sid);
 			rows.push({
 				name: card.name,
+				sessionId: sid,
 				container: "",
 				model: card.model,
 				color: card.color && isValidHex(card.color) ? card.color : fallbackColor(sid),
@@ -790,6 +805,7 @@ export default function (pi: ExtensionAPI) {
 			if (seenNames.has(entry.name)) continue;
 			rows.push({
 				name: entry.name,
+				sessionId: entry.session_id,
 				container: entry.container_id,
 				model: entry.model,
 				color: entry.color && isValidHex(entry.color) ? entry.color : fallbackColor(entry.session_id),
@@ -838,8 +854,33 @@ export default function (pi: ExtensionAPI) {
 			const namePart = r.name.padEnd(14);
 			const containerPart = r.container ? ` (${r.container.slice(0, 8)})` : "";
 			const modelPart = abbreviateModel(r.model).padEnd(28);
+
+			// Badge for "we sent this peer something and are still waiting on a
+			// reply" — only rendered when we actually have a live, unresolved
+			// pendingReplies entry targeting them (never invented from queue_depth
+			// alone, which would badge a peer busy with someone else's request).
+			let badge = "";
+			for (const entry of pendingReplies.values()) {
+				if (entry.target_name !== r.name || entry.result) continue;
+				const rowLive = !r.pending && !r.stale;
+				if (!rowLive) {
+					badge = ` ${ANSI_RED}${GLYPH_PENDING_UNREACHABLE}${ANSI_RESET}`;
+				} else {
+					const queueDepth = peerCards.get(r.sessionId)?.queue_depth;
+					badge =
+						typeof queueDepth === "number" && queueDepth > 0
+							? ` ${ANSI_YELLOW}${GLYPH_PENDING_PROCESSING}${ANSI_RESET}`
+							: ` ${ANSI_DIM}${GLYPH_PENDING_WAITING}${ANSI_RESET}`;
+				}
+				break;
+			}
+
+			// Badge sits before the free-text purpose column, not after: on a
+			// narrow terminal truncateToWidth cuts off the row's tail, and
+			// purpose (variable-length, least load-bearing) should be what gets
+			// eaten, not a fixed-width status signal.
 			const row =
-				` ${swatch} ${hexFg(r.color, namePart)}${containerPart}  ${modelPart} [${bar}] ${pctStr}  ${r.purpose || ""}`;
+				` ${swatch} ${hexFg(r.color, namePart)}${containerPart}  ${modelPart} [${bar}] ${pctStr}${badge}  ${r.purpose || ""}`;
 			lines.push(truncateToWidth(row, safeWidth, "…"));
 		}
 		lines.push(bottomBorder);

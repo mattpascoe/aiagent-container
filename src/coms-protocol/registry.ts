@@ -21,9 +21,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
 	RegistryEntry,
+	PendingSendEntry,
 } from "./envelopes.js";
 import {
 	dlqDir,
+	pendingSendsDir,
 	projectAgentsDir,
 	projectsRoot,
 	registryFilePath,
@@ -365,4 +367,84 @@ export function listDLQForSession(comsDir: string, project: string, sessionId: s
 		}
 	}
 	return out;
+}
+
+// ━━━ Pending sends ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//
+// One file per in-flight outbound send, so the (separate-process) status-line
+// renderer can tell "we're waiting on a reply from peer X" without any shared
+// memory with the MCP server. See `PendingSendEntry` in envelopes.ts.
+
+export function writePendingSend(comsDir: string, project: string, entry: PendingSendEntry): void {
+	const dir = pendingSendsDir(comsDir, project);
+	fs.mkdirSync(dir, { recursive: true });
+	const final = path.join(dir, `${entry.msg_id}.json`);
+	const tmp = `${final}.tmp`;
+	fs.writeFileSync(tmp, JSON.stringify(entry, null, 2));
+	fs.renameSync(tmp, final);
+}
+
+/** Best-effort unlink. No-op if the msg_id has no pending record (e.g. it's a
+ * reply to a prompt we answered, not one we sent). */
+export function deletePendingSend(comsDir: string, project: string, msgId: string): void {
+	if (!msgId) return;
+	try {
+		fs.unlinkSync(path.join(pendingSendsDir(comsDir, project), `${msgId}.json`));
+	} catch {
+		/* best-effort */
+	}
+}
+
+export function readAllPendingSends(comsDir: string, project: string): PendingSendEntry[] {
+	const dir = pendingSendsDir(comsDir, project);
+	if (!fs.existsSync(dir)) return [];
+	const out: PendingSendEntry[] = [];
+	let files: string[];
+	try {
+		files = fs.readdirSync(dir);
+	} catch {
+		return [];
+	}
+	for (const f of files) {
+		if (!f.endsWith(".json")) continue;
+		try {
+			const raw = fs.readFileSync(path.join(dir, f), "utf-8");
+			const parsed = JSON.parse(raw) as PendingSendEntry;
+			if (parsed && typeof parsed.msg_id === "string") out.push(parsed);
+		} catch {
+			/* skip malformed */
+		}
+	}
+	return out;
+}
+
+/**
+ * Deletes pending-send records older than `maxAgeMs`. Called opportunistically
+ * from `sendPrompt()` so an agent that sends and then never checks again
+ * doesn't leave a file behind forever. This is hygiene, not the correctness
+ * guarantee — the renderer applies its own staleness cutoff too, since a file
+ * can exist for up to one send-cycle before this prune next runs.
+ */
+export function prunePendingSends(comsDir: string, project: string, maxAgeMs: number): void {
+	const dir = pendingSendsDir(comsDir, project);
+	let files: string[];
+	try {
+		files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
+	} catch {
+		return;
+	}
+	const now = Date.now();
+	for (const f of files) {
+		const full = path.join(dir, f);
+		try {
+			const raw = fs.readFileSync(full, "utf-8");
+			const parsed = JSON.parse(raw) as PendingSendEntry;
+			const t = Date.parse(parsed.sent_at);
+			if (Number.isNaN(t) || now - t > maxAgeMs) {
+				fs.unlinkSync(full);
+			}
+		} catch {
+			/* malformed or mid-write — leave it, next prune may rescue/remove it */
+		}
+	}
 }

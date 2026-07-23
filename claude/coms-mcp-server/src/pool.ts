@@ -19,14 +19,35 @@
  */
 import {
   readAllRegistryEntries,
+  readAllPendingSends,
   isEntryLive,
   registryFilePath,
   type RegistryEntry,
+  type PendingSendEntry,
 } from "../../../src/coms-protocol/index.js";
 import { resolveIdentity } from "./identity.js";
 
 /** Heartbeat age beyond which a peer is shown as stale. Matches coms_list. */
 const STALE_MS = 30_000;
+
+/**
+ * Age beyond which a pending-send record is treated as if it didn't exist,
+ * even if its file hasn't been pruned yet (`sendPrompt()` prunes on its own
+ * cadence, not on ours). This is the actual guarantee against showing a
+ * "processing"/"waiting" badge forever for a request the agent walked away
+ * from — the file-level prune is just hygiene.
+ */
+const PENDING_STALE_MS = 10 * 60_000;
+
+/** Nerd-font glyphs for the three pending-request states. Same codepoints the
+ * Pi-side widget uses, so the two adapters read consistently. */
+const GLYPH_WAITING = ""; // clock — sent, no confirmation of peer activity yet
+const GLYPH_PROCESSING = ""; // spinner — peer's own queue_depth confirms it's busy
+const GLYPH_UNREACHABLE = ""; // warning triangle — pending request, peer heartbeat stale
+
+const FG_DIM = "\x1b[2;37m";
+const FG_YELLOW = "\x1b[93m";
+const FG_RED = "\x1b[91m";
 
 /** Width of the context-usage bar, in characters. */
 const BAR_WIDTH = 12;
@@ -146,6 +167,27 @@ function main(): void {
     .filter((e) => !e.explicit)
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Our own outbound requests still awaiting a reply, keyed by target. Only
+  // ours (sender_container_id === us) — never render another agent's pending
+  // state as if it were this session's.
+  let pendingSends: PendingSendEntry[] = [];
+  try {
+    pendingSends = readAllPendingSends(ident.coms_dir, ident.project).filter(
+      (p) =>
+        p.sender_container_id === ident.container_id &&
+        Date.now() - Date.parse(p.sent_at) <= PENDING_STALE_MS,
+    );
+  } catch {
+    pendingSends = [];
+  }
+  const pendingByTargetContainer = new Map<string, PendingSendEntry>();
+  for (const p of pendingSends) {
+    const existing = pendingByTargetContainer.get(p.target_container_id);
+    if (!existing || Date.parse(p.sent_at) < Date.parse(existing.sent_at)) {
+      pendingByTargetContainer.set(p.target_container_id, p);
+    }
+  }
+
   const width = Number(process.env.COLUMNS) || 80;
   // Four-column margin: the status line composites our rows into its own
   // frame with its own padding, so a box sized to the raw terminal width
@@ -208,7 +250,29 @@ function main(): void {
         ? ` ${pad(p.container_id ? `(${p.container_id.slice(0, 8)})` : "", 10)}`
         : "";
       const modelPart = pad(abbreviateModel(p.model, modelW), modelW);
-      const row = `${LG} ${swatch} ${namePart}${containerPart} ${modelPart} [${bar}] ${pctStr}  ${p.purpose || ""}${OFF}`;
+
+      // Badge for "we have a request pending with this peer". Absent
+      // pendingByTargetContainer entry => no badge at all, unchanged row —
+      // never show activity for a peer we haven't actually messaged.
+      let badge = "";
+      const pending = pendingByTargetContainer.get(p.container_id);
+      if (pending) {
+        if (!live) {
+          badge = ` ${FG_RED}${GLYPH_UNREACHABLE}${LG}`;
+        } else if (typeof p.queue_depth === "number" && p.queue_depth > 0) {
+          // Corroborated by the peer's own heartbeat-published queue_depth —
+          // the only genuinely real "actively processing" signal available.
+          badge = ` ${FG_YELLOW}${GLYPH_PROCESSING}${LG}`;
+        } else {
+          badge = ` ${FG_DIM}${GLYPH_WAITING}${LG}`;
+        }
+      }
+
+      // Badge sits before the free-text purpose column, not after: on a
+      // narrow terminal truncateToWidth cuts off the tail of the row, and
+      // purpose (variable-length, least load-bearing) should be what gets
+      // eaten, not a fixed-width status signal.
+      const row = `${LG} ${swatch} ${namePart}${containerPart} ${modelPart} [${bar}] ${pctStr}${badge}  ${p.purpose || ""}${OFF}`;
       lines.push(truncateToWidth(row, safeWidth));
     }
   }

@@ -27,6 +27,7 @@ import {
   ulid,
   listDLQForSession,
   deleteFromDLQ,
+  deletePendingSend,
   projectsRoot,
 } from "../../../src/coms-protocol/index.js";
 import { resolveIdentity, resolveSelf } from "./identity.js";
@@ -213,6 +214,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const envelopes = dlqEntries.map((e) => e.envelope);
         for (const e of dlqEntries) {
           deleteFromDLQ(ident.coms_dir, ident.project, e.msg_id);
+          // No-op if this drained envelope isn't a reply to something we sent
+          // (e.g. it's addressed to us for another reason) — see the
+          // best-effort guard in deletePendingSend itself.
+          deletePendingSend(ident.coms_dir, ident.project, e.msg_id);
         }
         // Also report recent inbound exchanges the listener answered on our
         // behalf. Those replies have already been sent — this is visibility
@@ -324,6 +329,7 @@ async function awaitResponseImpl(
       const env = e.envelope as { msg_id?: string; in_reply_to?: string } | null;
       if (env && (want.has(env.msg_id ?? "") || want.has(env.in_reply_to ?? ""))) {
         deleteFromDLQ(ident.coms_dir, ident.project, e.msg_id);
+        deletePendingSend(ident.coms_dir, ident.project, env.msg_id ?? env.in_reply_to ?? "");
         return {
           response: env,
           envelope: env,
