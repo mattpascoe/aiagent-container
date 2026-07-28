@@ -22,6 +22,13 @@ Usage:
                                             (reads hook JSON on stdin)
   agentharness-comms-claude pool            Render the peer pool as status-line
                                             rows (silent if coms is inactive)
+  agentharness-comms-claude gc [--apply]    Clean up stale sessions/ dirs for
+    [--max-age-days N]                     containers that never came back
+                                            (default 30 days, dry-run unless
+                                            --apply, 0 disables). Also forces
+                                            an immediate orphaned-socket sweep
+                                            (that part runs unconditionally —
+                                            see src/coms-protocol/gc.ts).
   agentharness-comms-claude merge-settings  Register the hook in ~/.claude/settings.json
   agentharness-comms-claude --help          Show this message
 
@@ -49,6 +56,8 @@ if (argv[0] === "listener") {
   await import("./hook.js");
 } else if (argv[0] === "pool") {
   await import("./pool.js");
+} else if (argv[0] === "gc") {
+  await import("./gc.js");
 } else if (argv[0] === "merge-settings") {
   await import("./merge-settings.js");
 } else {

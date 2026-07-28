@@ -67,6 +67,7 @@ COPY pi/extensions /pi/agent/extensions
 # We do NOT put it at /src/coms-protocol because /pi/agent/extensions/
 # only has 3 levels of `..` to escape, not 4.
 # -----------------------------------------------------------------------------
+COPY agent-roles /agent-roles
 COPY src/coms-protocol /pi/src/coms-protocol
 ENV COMS_DIR=/home/node/.agentharness-comms
 RUN mkdir -p /home/node/.agentharness-comms \

@@ -36,6 +36,9 @@ import {
   writeRegistryEntry,
   writeToDLQ,
   pruneDeadEntriesAcrossProjects,
+  touchSocket,
+  pruneStaleSockets,
+  HEARTBEAT_STALE_MS,
   appendAudit,
   type Envelope,
   type PromptEnvelope,
@@ -154,8 +157,37 @@ function writeSelfEntry(reason: "boot" | "heartbeat"): void {
 // Heartbeat: refresh our registry entry every 10s.
 const heartbeatInterval = setInterval(() => {
   try {
-    pruneDeadEntriesAcrossProjects(ident.coms_dir, { staleMs: 30_000 });
+    pruneDeadEntriesAcrossProjects(ident.coms_dir, { staleMs: HEARTBEAT_STALE_MS });
     writeSelfEntry("heartbeat");
+
+    // Refresh our own socket's mtime every tick, independent of the registry
+    // write above — this is what lets pruneStaleSockets tell "still alive"
+    // from "orphaned" without depending on registry-prune timing. See gc.ts's
+    // header comment for why that coupling is unsafe.
+    touchSocket(endpoint);
+
+    // Also refresh claude-session.json's mtime every tick, not just when the
+    // underlying claude_session_id changes (saveSessionRecord below only
+    // fires on a genuine new session, which for a --resume'd conversation
+    // can be once ever). Without this, a container that's been chatting
+    // steadily for weeks would still look "last touched at first boot" to
+    // pruneStaleSessions — exactly the false-positive a TTL-based sweep
+    // can't afford. Cheap enough to do every 10s: saveSessionRecord is an
+    // atomic write-then-rename of a tiny JSON file (same pattern as the
+    // registry write above), and only updated_at actually changes tick to
+    // tick — don't "optimize" this into a bare touch, the write IS the
+    // source of truth for claude_session_id too.
+    saveSessionRecord(ident.session_record_path, {
+      claude_session_id,
+      name: ident.name,
+      purpose: ident.purpose,
+      updated_at: new Date().toISOString(),
+    });
+
+    const { reaped } = pruneStaleSockets(ident.coms_dir);
+    if (reaped > 0) {
+      console.error(`[listener] pruneStaleSockets: reaped ${reaped} orphaned socket(s)`);
+    }
   } catch (err) {
     console.error(`[listener] heartbeat failed: ${(err as Error).message}`);
   }

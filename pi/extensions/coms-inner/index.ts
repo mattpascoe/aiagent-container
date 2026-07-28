@@ -89,6 +89,9 @@ import {
 	resolveUniqueName,
 	writeToDLQ,
 	listDLQForSession,
+	// Garbage collection
+	touchSocket,
+	pruneStaleSockets,
 	// Audit
 	appendAudit,
 	// Validators
@@ -744,6 +747,18 @@ export default function (pi: ExtensionAPI) {
 						session_id: identity.session_id,
 						reason: "registry file missing",
 					});
+				}
+
+				// Refresh our own socket's mtime every tick, independent of the
+				// registry write above — this is the liveness signal
+				// pruneStaleSockets relies on instead of "does a registry entry
+				// currently exist" (a single stalled registry write shouldn't get
+				// a still-live socket reaped out from under us). See
+				// src/coms-protocol/gc.ts's header comment for the full reasoning.
+				touchSocket(identity.endpoint);
+				const { reaped } = pruneStaleSockets(COMS_DIR);
+				if (reaped > 0) {
+					console.error(`[coms-inner] pruneStaleSockets: reaped ${reaped} orphaned socket(s)`);
 				}
 			} catch {
 				/* best-effort */

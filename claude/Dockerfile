@@ -78,6 +78,7 @@ RUN npm install -g @anthropic-ai/claude-code
 # imports `@modelcontextprotocol/sdk` bare at runtime, so wiping node_modules
 # outright leaves the MCP server unable to start (ERR_MODULE_NOT_FOUND).
 # -----------------------------------------------------------------------------
+COPY agent-roles /agent-roles
 COPY src/coms-protocol /src/coms-protocol
 COPY claude/coms-mcp-server /claude/coms-mcp-server
 RUN cd /claude/coms-mcp-server \

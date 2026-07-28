@@ -101,20 +101,31 @@ run-args: setup-$(SVC)
 #   - pi reads the role file's frontmatter to populate its coms identity.
 #   - claude ignores the frontmatter (body still loads as the system prompt).
 # Extensions are auto-loaded by the pi entrypoint, so no -e is needed.
-ROLE_FILE := /workspace/agent-roles/$(ROLE).md
-MODEL_ARG := $(if $(MODEL),--model $(MODEL),)
+# TODO: rolefile path will not be this. need to copy them in during compose
+# ROLE_FILE := /agent-roles/$(ROLE).md
+# MODEL_ARG := $(if $(MODEL),--model $(MODEL),)
 
-pi-role: setup-pi
-	@test -n "$(ROLE)" || { echo "ERROR: ROLE is required (e.g. make pi-role ROLE=reviewer)"; exit 1; }
-	docker compose run --service-ports --rm pi \
-	  --append-system-prompt $(ROLE_FILE) --project $(PROJECT) $(MODEL_ARG) \
-	  $(if $(PROMPT),-p "$(PROMPT)",)
-
-claude-role: setup-claude
-	@test -n "$(ROLE)" || { echo "ERROR: ROLE is required (e.g. make claude-role ROLE=reviewer)"; exit 1; }
-	docker compose run --service-ports --rm -e AGENTHARNESS_PROJECT=$(PROJECT) claude \
-	  --append-system-prompt $(ROLE_FILE) $(MODEL_ARG) \
+# TODO: need to get rid of the specific xxx-role entries below.
+# TODO: refine the use of the AGENTHARNESS_XXX env variables. they are not consistently applied over pi and claude. pi is the preference method. seems frontmatter is the issue.
+role: setup-$(SVC)
+	@test -n "$(ROLE)" || { echo "ERROR: ROLE is required (e.g. make role SVC=$(SVC) ROLE=reviewer)"; exit 1; }
+	docker compose run --service-ports --rm $(SVC) \
+	  --append-system-prompt /agent-roles/$(ROLE).md \
+	  $(if $(filter pi,$(SVC)),--project "$(PROJECT)",) \
+	  $(if $(MODEL),--model "$(MODEL)",) \
 	  $(if $(PROMPT),--print "$(PROMPT)",)
+
+# pi-role: setup-pi
+# 	@test -n "$(ROLE)" || { echo "ERROR: ROLE is required (e.g. make pi-role ROLE=reviewer)"; exit 1; }
+# 	docker compose run --service-ports --rm pi \
+# 	  --append-system-prompt $(ROLE_FILE) --project $(PROJECT) $(MODEL_ARG) \
+# 	  $(if $(PROMPT),--print "$(PROMPT)",)
+#
+# claude-role: setup-claude
+# 	@test -n "$(ROLE)" || { echo "ERROR: ROLE is required (e.g. make claude-role ROLE=reviewer)"; exit 1; }
+# 	docker compose run --service-ports --rm -e AGENTHARNESS_PROJECT=$(PROJECT) claude \
+# 	  --append-system-prompt $(ROLE_FILE) $(MODEL_ARG) \
+# 	  $(if $(PROMPT),--print "$(PROMPT)",)
 
 shell: setup-$(SVC)
 	docker compose run --service-ports --rm --entrypoint /bin/bash $(SVC)

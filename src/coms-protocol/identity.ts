@@ -98,11 +98,33 @@ export function resolveComsDir(): string {
  * scope for v1; this branch exists for completeness so the codebase
  * doesn't break if someone runs it locally on Windows.
  */
+/** Directory names under `<COMS_DIR>`, shared so path-building and
+ * GC's root-walking helpers can't drift apart on a layout change. */
+const SOCKETS_DIRNAME = "sockets";
+const SESSIONS_DIRNAME = "sessions";
+
 export function makeEndpoint(comsDir: string, containerId: string, sessionId: string): string {
 	if (process.platform === "win32") {
 		return `\\\\.\\pipe\\pi-coms-${sessionId}`;
 	}
-	return path.join(comsDir, "sockets", containerId, `${sessionId}.sock`);
+	return path.join(comsDir, SOCKETS_DIRNAME, containerId, `${sessionId}.sock`);
+}
+
+/**
+ * Computes the sockets root directory (parent of every per-container socket
+ * directory). Used by garbage collection to walk all `.sock` files without
+ * needing to already know which container_ids exist.
+ */
+export function socketsRoot(comsDir: string): string {
+	return path.join(comsDir, SOCKETS_DIRNAME);
+}
+
+/**
+ * Computes the sessions root directory (parent of every per-container
+ * session directory — `claude-session.json` / `resolved_model.txt`).
+ */
+export function sessionsRoot(comsDir: string): string {
+	return path.join(comsDir, SESSIONS_DIRNAME);
 }
 
 /**

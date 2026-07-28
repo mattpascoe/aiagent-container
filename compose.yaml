@@ -37,9 +37,9 @@ services:
       DEVCONTAINER: true
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # agentharness-comms: container-scoped agent identity, optional overrides
-      AGENTHARNESS_CNAME: ${CLAUDE_CNAME:-}
-      AGENTHARNESS_PURPOSE: ${CLAUDE_PURPOSE:-}
-      AGENTHARNESS_COLOR: ${CLAUDE_COLOR:-}
+      AGENTHARNESS_CNAME: ${COMS_CNAME:-}
+      AGENTHARNESS_PURPOSE: ${COMS_PURPOSE:-}
+      AGENTHARNESS_COLOR: ${COMS_COLOR:-}
       # Coms project namespace. Defaults to basename of WORKDIR (set by the
       # Makefile); claude-role also passes this explicitly via -e.
       AGENTHARNESS_PROJECT: ${PROJECT:-}
@@ -101,9 +101,9 @@ services:
       <<: *common-env
       PI_CODING_AGENT_DIR: ~/.pi/agent
       # agentharness-comms: container-scoped agent identity, optional overrides
-      AGENTHARNESS_CNAME: ${PI_CNAME:-}
-      AGENTHARNESS_PURPOSE: ${PI_PURPOSE:-}
-      AGENTHARNESS_COLOR: ${PI_COLOR:-}
+      AGENTHARNESS_CNAME: ${COMS_CNAME:-}
+      AGENTHARNESS_PURPOSE: ${COMS_PURPOSE:-}
+      AGENTHARNESS_COLOR: ${COMS_COLOR:-}
     volumes:
       - ${WORKDIR}:/workspace
       - ~/.pi:/home/node/.pi

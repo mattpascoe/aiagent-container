@@ -18,3 +18,4 @@ export * from "./identity.js";
 export * from "./transport.js";
 export * from "./registry.js";
 export * from "./audit.js";
+export * from "./gc.js";

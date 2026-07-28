@@ -24,6 +24,7 @@ import {
   resolveComsDir,
   defaultProjectFromCwd,
   readAllRegistryEntries,
+  sessionsRoot,
 } from "../../../src/coms-protocol/index.js";
 
 export interface ClaudeSessionRecord {
@@ -170,8 +171,7 @@ export function resolveIdentity(opts?: {
     readEnv("AGENTHARNESS_COLOR") ??
     DEFAULT_COLOR;
   const session_record_path = path.join(
-    coms_dir,
-    "sessions",
+    sessionsRoot(coms_dir),
     container_id,
     "claude-session.json",
   );
