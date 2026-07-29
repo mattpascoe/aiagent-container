@@ -40,13 +40,19 @@ RUN rm -f /bin/su /usr/bin/su /bin/mount /usr/bin/mount /bin/umount /usr/bin/umo
 # The Global Syscall Firewall (LD_PRELOAD) - Blocks Child Processes
 # -----------------------------------------------------------------------------
 COPY src/fs-vault.c /tmp/fs-vault.c
-RUN gcc -shared -fPIC -O2 /tmp/fs-vault.c -o /usr/local/lib/fs-vault.so -ldl \
+RUN gcc -shared -fPIC -O2 -Wall -Wextra /tmp/fs-vault.c -o /usr/local/lib/fs-vault.so -ldl \
     && rm /tmp/fs-vault.c \
     && echo "/usr/local/lib/fs-vault.so" > /etc/ld.so.preload
 
 # -----------------------------------------------------------------------------
-# Comprehensive Application-Layer Firewall (V8 Hook)
+# Application-Layer Firewall (V8 Hook) — PI IMAGES ONLY
 # -----------------------------------------------------------------------------
+# Deliberately not present in claude/hermes/opencode. Both of its keys are pi
+# implementation details: the guarded paths (.pi/agent) and the "is this an
+# agent tool?" test (a `/tools/` frame in the JS stack, which only exists
+# because pi ships tools as separate on-disk modules). Bundled single-file
+# CLIs like claude-code produce no such frame, so the hook is a no-op there
+# while still adding NODE_OPTIONS overhead to every Node child process.
 COPY src/app-firewall.js /usr/local/lib/app-firewall.js
 
 # Force Node.js to load the firewall before initializing the agent

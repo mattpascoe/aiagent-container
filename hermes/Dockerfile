@@ -33,17 +33,9 @@ RUN rm -f /bin/su /usr/bin/su /bin/mount /usr/bin/mount /bin/umount /usr/bin/umo
 # The Global Syscall Firewall (LD_PRELOAD) - Blocks Child Processes
 # -----------------------------------------------------------------------------
 COPY src/fs-vault.c /tmp/fs-vault.c
-RUN gcc -shared -fPIC -O2 /tmp/fs-vault.c -o /usr/local/lib/fs-vault.so -ldl \
+RUN gcc -shared -fPIC -O2 -Wall -Wextra /tmp/fs-vault.c -o /usr/local/lib/fs-vault.so -ldl \
     && rm /tmp/fs-vault.c \
     && echo "/usr/local/lib/fs-vault.so" > /etc/ld.so.preload
-
-# -----------------------------------------------------------------------------
-# Comprehensive Application-Layer Firewall (V8 Hook)
-# -----------------------------------------------------------------------------
-COPY src/app-firewall.js /usr/local/lib/app-firewall.js
-
-# Force Node.js to load the firewall before initializing the agent
-ENV NODE_OPTIONS="--require /usr/local/lib/app-firewall.js"
 
 COPY hermes/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

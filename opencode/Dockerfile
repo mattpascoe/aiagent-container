@@ -42,15 +42,9 @@ RUN rm -f \
 # Build fs-vault (LD_PRELOAD syscall firewall)
 # ------------------------------------------------------------
 COPY src/fs-vault.c /tmp/fs-vault.c
-RUN gcc -shared -fPIC -O2 /tmp/fs-vault.c -o /usr/local/lib/fs-vault.so -ldl && \
+RUN gcc -shared -fPIC -O2 -Wall -Wextra /tmp/fs-vault.c -o /usr/local/lib/fs-vault.so -ldl && \
     rm /tmp/fs-vault.c && \
     echo "/usr/local/lib/fs-vault.so" > /etc/ld.so.preload
-
-# ------------------------------------------------------------
-# Application-layer firewall
-# ------------------------------------------------------------
-COPY src/app-firewall.js /usr/local/lib/app-firewall.js
-ENV NODE_OPTIONS="--require /usr/local/lib/app-firewall.js"
 
 # ------------------------------------------------------------
 # Entrypoint
