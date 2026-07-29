@@ -34,13 +34,20 @@ Note that not all images use these hardened features fully.
 - Container filesystem mounted read-only; writable paths are explicit `tmpfs` mounts or volumes.
 - PID limit of 150 enforced at the compose level.
 
-### 2. Syscall Firewall — `src/fs-vault.c` (LD_PRELOAD)
-- A shared library compiled at build time and injected via `/etc/ld.so.preload`. It intercepts `open`, `openat`, `fopen`, and their 64-bit variants for every process in the container. Any attempt to open a path containing `auth.json` is blocked with `EACCES` unless the calling process is the primary agent binary (`pi`/`/bin/pi`). This stops shell utilities (`cat`, `grep`) and arbitrary Node scripts from reading agent authentication tokens.
-- NOTE: Claude does not really benefit from this
+### 2. Syscall Firewall — `src/fs-vault.c` (LD_PRELOAD) — **all images**
+- A shared library compiled at build time and injected via `/etc/ld.so.preload`. It intercepts `open`, `openat`, `fopen` and their 64-bit variants for every dynamically-linked process in the container, and denies reads of known agent credential stores with `EACCES` unless the caller matches that store's owner.
+- Guarded paths are a policy table covering all harnesses: pi (`.pi/agent/auth.json`), claude (`.claude/.credentials.json`, `.claude.json`), opencode (`.local/share/opencode/auth.json`), hermes (`hermes-agent/auth.json`), plus a catch-all for bare `auth.json`.
+- Identity is taken from `/proc/self/exe` (not argv, which the caller controls). Effect: shell utilities and interpreters (`cat`, `grep`, `tail`, `python3`, `jq`) are blocked; the Node-based agent itself is allowed.
+- **This is a speed bump, not a boundary.** Documented gaps, also listed at the top of the source:
+  - Only dynamically-linked libc callers are covered. A static Go binary or direct-syscall program bypasses it, and every image ships `build-essential` + `python3-dev`.
+  - All our agents are Node, so `/proc/self/exe` is `/usr/local/bin/node` for pi, claude, opencode *and* for any `node evil.js`. Node-vs-Node cannot be distinguished. The value here is blocking shell tools, not sandboxing Node from itself.
+  - Only the `open` family is hooked; `rename`/`link`/`stat` probing and inherited fds are untouched.
+  - The real fix for same-uid reads is OS-level: give each agent its own uid and `chmod 0600` its credentials, leaving this shim as defense-in-depth.
 
-### 3. Application Firewall — `src/app-firewall.js` (Node.js `--require`)
-- Loaded into every Node.js process via `NODE_OPTIONS=--require`. Wraps all major `fs` module methods (sync, async, and `fs.promises`) with a call-stack check. Any filesystem access to paths matching `.pi/agent`, `gh_*`, `.secrets`, or `.env` that originates from within an agent's `/tools/` call stack is thrown as an error. This prevents agent tool invocations from reading configuration and credential files while allowing the application itself to operate normally.
-- NOTE: Claude does not really benefit from this
+### 3. Application Firewall — `src/app-firewall.js` (Node.js `--require`) — **pi images only**
+- Loaded into every Node.js process via `NODE_OPTIONS=--require`. Wraps all major `fs` methods (sync, async, `fs.promises`) with a call-stack check: access to paths matching `.pi/agent`, `gh_*`, `.secrets` or `.env` throws if the stack contains a `/tools/` frame, so agent tool invocations are denied while the application itself (e.g. `/login`) operates normally.
+- Intentionally **not** installed in the claude, hermes or opencode images. It is pi-specific twice over: the guarded paths are pi's, and the `/tools/` stack test only works because pi ships its tools as separate on-disk modules (`dist/core/tools/*.js`). Bundled single-file CLIs such as claude-code generate no `/tools/` frame, so the check can never fire — while `NODE_OPTIONS` still gets inherited by every Node child (npm, MCP servers, build tooling).
+- Note it also cannot see past the process boundary: a `cat .env` from a Bash tool is unaffected. Only the LD_PRELOAD layer covers spawned children.
 
 ## Prerequisites
 
@@ -81,13 +88,19 @@ All containers have a `/entrypoint.sh` even if it does not do anything extra. Th
 ├── claude/
 │   ├── Dockerfile        # Claude Code container image
 │   └── entrypoint.sh     # Restores ~/.claude.json from backup before launching claude
+├── hermes/
+│   ├── Dockerfile        # Hermes agent container image
+│   └── entrypoint.sh     # Launches hermes (optionally with the dashboard)
+├── opencode/
+│   ├── Dockerfile        # OpenCode agent container image
+│   └── entrypoint.sh     # Launches opencode
 ├── pi/
 │   ├── Dockerfile        # Pi agent container image
 │   ├── extensions        # Pi extensions that are copied to the container and loaded via the entrypoint
 │   └── entrypoint.sh     # Launches pi directly
 └── src/
-    ├── app-firewall.js   # Node.js fs hook (application-layer sandbox)
-    └── fs-vault.c        # LD_PRELOAD syscall hook (OS-layer sandbox)
+    ├── app-firewall.js   # Node.js fs hook (application-layer sandbox, pi images only)
+    └── fs-vault.c        # LD_PRELOAD open() hook (credential shield, all images)
 ```
 
 ## Environment Variables
