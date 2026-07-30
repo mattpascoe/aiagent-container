@@ -36,7 +36,7 @@ Note that not all images use these hardened features fully.
 
 ### 2. Syscall Firewall — `src/fs-vault.c` (LD_PRELOAD) — **all images**
 - A shared library compiled at build time and injected via `/etc/ld.so.preload`. It intercepts `open`, `openat`, `fopen` and their 64-bit variants for every dynamically-linked process in the container, and denies reads of known agent credential stores with `EACCES` unless the caller matches that store's owner.
-- Guarded paths are a policy table covering all harnesses: pi (`.pi/agent/auth.json`), claude (`.claude/.credentials.json`, `.claude.json`), opencode (`.local/share/opencode/auth.json`), hermes (`hermes-agent/auth.json`), plus a catch-all for bare `auth.json`.
+- Guarded paths are a policy table covering all harnesses: pi (`.pi/agent/auth.json`), claude (`.claude/.credentials.json` only — not `~/.claude.json` or its backup/tmp variants), opencode (`.local/share/opencode/auth.json`), hermes (`hermes-agent/auth.json`), plus a catch-all for bare `auth.json`.
 - Identity is taken from `/proc/self/exe` (not argv, which the caller controls). Effect: shell utilities and interpreters (`cat`, `grep`, `tail`, `python3`, `jq`) are blocked; the Node-based agent itself is allowed.
 - **This is a speed bump, not a boundary.** Documented gaps, also listed at the top of the source:
   - Only dynamically-linked libc callers are covered. A static Go binary or direct-syscall program bypasses it, and every image ships `build-essential` + `python3-dev`.
