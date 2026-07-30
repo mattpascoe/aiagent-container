@@ -93,9 +93,12 @@ static const vault_rule rules[] = {
     /* pi — OpenRouter/Copilot tokens */
     { "/.pi/agent/auth.json",  IDENT_EXE,  "/usr/local/bin/node", NULL, "pi auth" },
 
-    /* claude code — oauth creds + config (config holds tokens in some versions) */
+    /* claude code — oauth creds only.
+     * Deliberately NOT vaulting ~/.claude.json (or its .backup.* / .tmp
+     * variants): the entrypoint restores that file with shell `cp`, merge-mcp
+     * rewrites it, and the file is general client state rather than a pure
+     * secret store. Tokens live in .credentials.json. */
     { "/.claude/.credentials.json", IDENT_EXE, "/usr/local/bin/node", NULL, "claude creds" },
-    { "/.claude.json",              IDENT_EXE, "/usr/local/bin/node", NULL, "claude config" },
 
     /* opencode */
     { "/.local/share/opencode/auth.json", IDENT_EXE, "/usr/local/bin/node", NULL, "opencode auth" },
